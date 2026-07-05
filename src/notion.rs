@@ -232,7 +232,7 @@ impl NotionWriter {
             };
             let tradesnap_url = url.trim_end_matches('/');
             let http_client = reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(15))
+                .timeout(std::time::Duration::from_secs(30))
                 .build()
                 .unwrap_or_else(|_| reqwest::Client::new());
             let mut children = Vec::new();
