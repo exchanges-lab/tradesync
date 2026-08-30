@@ -4,6 +4,10 @@ services:
     container_name: tradesync
     env_file:
       - .env
+    environment:
+      REDIRECT_PATH: /app/redirect.yml
+    volumes:
+      - ${REDIRECT_PATH:-./redirect.yml}:/app/redirect.yml:ro
     networks:
       - cycle
     restart: unless-stopped

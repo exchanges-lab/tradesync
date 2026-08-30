@@ -1,7 +1,7 @@
 use alloy::primitives::address;
-use tradesync::HyperliquidMonitor;
 use tokio::sync::mpsc;
 use tokio::time::{Duration, timeout};
+use tradesync::HyperliquidMonitor;
 
 #[tokio::test]
 async fn test_monitor_initialization() {

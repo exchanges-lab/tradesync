@@ -1,11 +1,12 @@
 use anyhow::{Context, Result};
 use chrono::{TimeZone, Utc};
 use dotenvy::dotenv;
-use tradesync::{HyperliquidMonitor, NotionRowData, NotionWriter};
 use std::env;
+use std::path::PathBuf;
 use tokio::sync::mpsc;
 use tracing::{error, info};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
+use tradesync::{HyperliquidMonitor, NotionRowData, NotionWriter, SymbolRedirects};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -48,6 +49,13 @@ async fn main() -> Result<()> {
         .parse::<bool>()
         .unwrap_or(false);
 
+    let redirect_path = env::var("REDIRECT_PATH").ok().map(PathBuf::from);
+    let symbol_redirects = SymbolRedirects::load(redirect_path.as_deref())
+        .context("Failed to load symbol redirects")?;
+    if let Some(path) = &redirect_path {
+        info!(path = %path.display(), "Loaded symbol redirects");
+    }
+
     let snapshot_15m = env::var("SYMBOL_15M_SNAPSHOT")
         .or_else(|_| env::var("SYMBOL_15m_SNAPSHOT"))
         .unwrap_or_else(|_| "false".to_string())
@@ -79,7 +87,6 @@ async fn main() -> Result<()> {
         notion_database_id,
         enable_screenshot,
         tradesnap_url,
-        btcusdt_snapshot,
         snapshot_15m,
         snapshot_1h,
         snapshot_4h,
@@ -105,8 +112,7 @@ async fn main() -> Result<()> {
             .unwrap_or_else(Utc::now);
         let date_time_str = dt.format("%Y/%m/%d %H:%M").to_string();
 
-        // Map Symbol to appends USDC
-        let symbol_formatted = format!("{}USDC", event.coin);
+        let resolved_symbol = symbol_redirects.resolve(&event.coin, btcusdt_snapshot);
 
         // Map Direction: B -> Long, S -> Short
         let direction_str = if event.side == "B" {
@@ -136,7 +142,7 @@ async fn main() -> Result<()> {
 
         // Construct Notion Row Data
         let row = NotionRowData {
-            symbol: symbol_formatted,
+            symbol: resolved_symbol.notion_symbol,
             quantity: event.sz,
             filled_price: event.px,
             direction: direction_str,
@@ -146,6 +152,7 @@ async fn main() -> Result<()> {
             order_id: event.oid,
             check: false,
             order_type: order_type_str,
+            snapshot_ticker: resolved_symbol.snapshot_ticker,
         };
 
         // Write row to Notion

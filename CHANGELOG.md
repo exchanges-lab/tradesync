@@ -5,6 +5,7 @@
 
 ## [Unreleased]
 ### Added
+- 新增 `REDIRECT_PATH` 配置，支持通过扁平 YAML 文件将 HIP-3 原始 symbol 重定向到准确的 TradingView ticker。
 - 支持对接 TradeSnap 截图服务，自动抓取新交易对应的 TradingView 图表快照。
 - 新增 `ENABLE_SCREENSHOT` 与 `TRADESNAP_URL` 配置，控制截图的开关和请求地址。
 - 新增 `BTCUSDT_SNAPSHOT` 配置，控制使用 `BINANCE:{coin}USDT.P` 还是 `BINANCE:{coin}USDC.P` 格式生成图表截图。
@@ -22,6 +23,7 @@
 - 添加外部参考库作为 Git 子模块：`noc` (notion-client) 与 `hype` (hyperliquid-rust-sdk)。
 
 ### Changed
+- HIP-3 交易写入 Notion 时自动移除 DEX namespace（如 `xyz:GOLD` 写为 `GOLD`）；未配置截图重定向时安全跳过截图。
 - 将项目与 Crate 命名从 `nosync` 统一重命名为 `tradesync`，并同步更新了所有 Rust 源码包导入和 Docker 镜像名称。
 - 更新 Docker Compose 配置，移除了 `tradesnap` 和 `tradesync` （原 `nosync`）多余的 volumes 目录挂载，并统一使用 `:latest` 镜像标签以替代固定版本。
 - 移除 `Level` 字段的相关计算与 Notion 写入逻辑（交由用户后续手动设置）。

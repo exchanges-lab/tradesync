@@ -1,9 +1,9 @@
 use alloy::primitives::address;
 use anyhow::Result;
-use tradesync::HyperliquidMonitor;
 use tokio::sync::mpsc;
 use tracing::info;
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
+use tradesync::HyperliquidMonitor;
 
 #[tokio::main]
 async fn main() -> Result<()> {

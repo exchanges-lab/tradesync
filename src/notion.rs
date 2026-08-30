@@ -13,7 +13,7 @@ use reqwest::ClientBuilder;
 use serde_json::Number;
 use std::collections::BTreeMap;
 use thiserror::Error;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 /// Errors specific to the NotionWriter.
 #[derive(Error, Debug)]
@@ -30,7 +30,6 @@ pub struct NotionWriter {
     database_id: String,
     enable_screenshot: bool,
     tradesnap_url: Option<String>,
-    btcusdt_snapshot: bool,
     snapshot_15m: bool,
     snapshot_1h: bool,
     snapshot_4h: bool,
@@ -45,7 +44,6 @@ impl NotionWriter {
         database_id: String,
         enable_screenshot: bool,
         tradesnap_url: Option<String>,
-        btcusdt_snapshot: bool,
         snapshot_15m: bool,
         snapshot_1h: bool,
         snapshot_4h: bool,
@@ -58,7 +56,6 @@ impl NotionWriter {
             database_id,
             enable_screenshot,
             tradesnap_url,
-            btcusdt_snapshot,
             snapshot_15m,
             snapshot_1h,
             snapshot_4h,
@@ -217,22 +214,19 @@ impl NotionWriter {
         info!(page_id = %page.id, "Successfully wrote row to Notion Database");
 
         if let (true, Some(url)) = (self.enable_screenshot, &self.tradesnap_url) {
-            let coin = if data.symbol.ends_with("USDC") {
-                data.symbol.trim_end_matches("USDC").to_string()
-            } else if data.symbol.ends_with("USDT") {
-                data.symbol.trim_end_matches("USDT").to_string()
-            } else {
-                data.symbol.clone()
-            };
-
-            let ticker = if self.btcusdt_snapshot {
-                format!("BINANCE:{}USDT.P", coin.to_uppercase())
-            } else {
-                format!("BINANCE:{}USDC.P", coin.to_uppercase())
+            let Some(ticker) = data.snapshot_ticker.as_deref() else {
+                warn!(
+                    symbol = %data.symbol,
+                    order_id = data.order_id,
+                    "Skipping screenshots because no TradingView redirect is configured"
+                );
+                return Ok(());
             };
             let tradesnap_url = url.trim_end_matches('/');
             let http_client = reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(15))
+                // Must be longer than TradeSnap's default 20-second hard
+                // deadline so its HTTP error reaches us before we disconnect.
+                .timeout(std::time::Duration::from_secs(25))
                 .build()
                 .unwrap_or_else(|_| reqwest::Client::new());
             let mut children = Vec::new();

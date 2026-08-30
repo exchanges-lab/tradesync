@@ -30,16 +30,17 @@ pub struct PositionTradeEvent {
 /// Represents the structured row data formatted for Notion database insertion.
 #[derive(Debug, Clone)]
 pub struct NotionRowData {
-    pub symbol: String,       // e.g., "BTCUSDC"
-    pub quantity: String,     // e.g., "0.02484"
-    pub filled_price: String, // e.g., "72543"
-    pub direction: String,    // "Long" or "Short"
-    pub exchange: String,     // e.g., "Hyperliquid"
-    pub date_time: String,    // Format: "YYYY/MM/DD HH:MM"
-    pub time: u64,            // Unix timestamp in milliseconds
-    pub order_id: u64,        // Hyperliquid order ID (oid)
-    pub check: bool,          // false
-    pub order_type: String,   // "MARKET" or "LIMIT"
+    pub symbol: String,                  // e.g., "BTCUSDC"
+    pub quantity: String,                // e.g., "0.02484"
+    pub filled_price: String,            // e.g., "72543"
+    pub direction: String,               // "Long" or "Short"
+    pub exchange: String,                // e.g., "Hyperliquid"
+    pub date_time: String,               // Format: "YYYY/MM/DD HH:MM"
+    pub time: u64,                       // Unix timestamp in milliseconds
+    pub order_id: u64,                   // Hyperliquid order ID (oid)
+    pub check: bool,                     // false
+    pub order_type: String,              // "MARKET" or "LIMIT"
+    pub snapshot_ticker: Option<String>, // Exact TradingView ticker, if configured
 }
 
 impl NotionRowData {
