@@ -133,7 +133,7 @@ cargo run --example demo
 | `RUST_LOG` | 日志详细级别（error、warn、info、debug） | 否 | `info` |
 | `ENABLE_SCREENSHOT` | 在 Notion 页面中启用 TradingView 图表截图（`true`/`false`） | 否 | `false` |
 | `TRADESNAP_URL` | TradeSnap 服务的 API 端点 URL | 否 | `http://tradesnap:8003` |
-| `REDIRECT_PATH` | 可选的 YAML 文件路径，将 HIP-3 原始 symbol 映射到准确的 TradingView ticker | 否 | `./redirect.yml` |
+| `REDIRECT_PATH` | 可选的 YAML 文件路径，将 Hyperliquid 原始 symbol（主网或 HIP-3）映射到准确的 TradingView ticker | 否 | `./redirect.yml` |
 | `BTCUSDT_SNAPSHOT` | 截图使用币安 USDT 合约（`true`）而非 USDC 合约（`false`） | 否 | `false` |
 | `SYMBOL_15M_SNAPSHOT` | 捕获并插入 15m 周期截图（`true`/`false`） | 否 | `false` |
 | `SYMBOL_1H_SNAPSHOT` | 捕获并插入 1h 周期截图（`true`/`false`） | 否 | `false` |
@@ -145,9 +145,10 @@ HIP-3 symbol 写入 Notion 时会去掉 DEX 前缀（例如 `xyz:GOLD` 写为 `G
 ```yaml
 "xyz:GOLD": "TVC:GOLD"
 "xyz:NVDA": "NASDAQ:NVDA"
+"kPEPE": "BINANCE:1000PEPEUSDT.P"
 ```
 
-未配置映射的 HIP-3 symbol 仍会写入 Notion，但会跳过截图，不会猜测数据源。
+不带前缀的 key 为主网 symbol，配置后会覆盖默认的 `BINANCE:{coin}USDT.P` ticker（适用于 `kPEPE` 这类 1000 倍合约）。未配置映射的 HIP-3 symbol 仍会写入 Notion，但会跳过截图，不会猜测数据源。
 使用仓库自带的 Docker Compose 时，`REDIRECT_PATH` 填宿主机上的 YAML 路径；Compose 会将它只读挂载到容器内的 `/app/redirect.yml`。
 
 

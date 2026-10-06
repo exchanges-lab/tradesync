@@ -281,9 +281,9 @@ impl NotionWriter {
                                             paragraph: ParagraphValue {
                                                 rich_text: vec![RichText::Text {
                                                     text: Text {
-                                                        content: format!(
-                                                            "{}_{} Snapshot",
-                                                            data.symbol, timeframe
+                                                        content: snapshot_title(
+                                                            &data.symbol,
+                                                            timeframe,
                                                         ),
                                                         link: None,
                                                     },
@@ -372,5 +372,22 @@ impl NotionWriter {
         }
 
         Ok(())
+    }
+}
+
+/// Heading shown above each screenshot, e.g. `BTCUSDC 15M Snapshot`.
+fn snapshot_title(symbol: &str, timeframe: &str) -> String {
+    format!("{} {} Snapshot", symbol, timeframe.to_uppercase())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn formats_snapshot_title() {
+        assert_eq!(snapshot_title("BTCUSDC", "15m"), "BTCUSDC 15M Snapshot");
+        assert_eq!(snapshot_title("GOLD", "4h"), "GOLD 4H Snapshot");
+        assert_eq!(snapshot_title("kPEPEUSDC", "1D"), "kPEPEUSDC 1D Snapshot");
     }
 }

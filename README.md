@@ -133,7 +133,7 @@ cargo run --example demo
 | `RUST_LOG` | Logging verbosity level (error, warn, info, debug) | No | `info` |
 | `ENABLE_SCREENSHOT` | Enable TradingView chart screenshots in Notion pages (`true`/`false`) | No | `false` |
 | `TRADESNAP_URL` | The API endpoint URL of the TradeSnap service | No | `http://tradesnap:8003` |
-| `REDIRECT_PATH` | Optional path to a YAML file mapping raw HIP-3 symbols to exact TradingView tickers | No | `./redirect.yml` |
+| `REDIRECT_PATH` | Optional path to a YAML file mapping raw Hyperliquid symbols (main-dex or HIP-3) to exact TradingView tickers | No | `./redirect.yml` |
 | `BTCUSDT_SNAPSHOT` | Use Binance USDT perps (`true`) instead of USDC perps (`false`) for screenshots | No | `false` |
 | `SYMBOL_15M_SNAPSHOT` | Capture and insert 15m interval screenshot (`true`/`false`) | No | `false` |
 | `SYMBOL_1H_SNAPSHOT` | Capture and insert 1h interval screenshot (`true`/`false`) | No | `false` |
@@ -145,9 +145,10 @@ HIP-3 symbols are written to Notion without their DEX prefix (`xyz:GOLD` becomes
 ```yaml
 "xyz:GOLD": "TVC:GOLD"
 "xyz:NVDA": "NASDAQ:NVDA"
+"kPEPE": "BINANCE:1000PEPEUSDT.P"
 ```
 
-An unmapped HIP-3 symbol is still written to Notion, but its screenshots are skipped instead of guessing a data source.
+Keys without a prefix are main-dex symbols; a redirect overrides the default `BINANCE:{coin}USDT.P` ticker (useful for 1000x contracts such as `kPEPE`). An unmapped HIP-3 symbol is still written to Notion, but its screenshots are skipped instead of guessing a data source.
 When using the included Docker Compose file, `REDIRECT_PATH` is the host path to the YAML file; Compose mounts it read-only at `/app/redirect.yml`.
 
 

@@ -55,14 +55,15 @@ impl SymbolRedirects {
             };
         }
 
-        let snapshot_quote = if use_usdt_snapshot { "USDT" } else { "USDC" };
+        // Main-dex symbols use an explicit redirect when present (e.g. kPEPE ->
+        // BINANCE:1000PEPEUSDT.P), otherwise fall back to the Binance perp.
+        let snapshot_ticker = self.0.get(raw_symbol).cloned().unwrap_or_else(|| {
+            let snapshot_quote = if use_usdt_snapshot { "USDT" } else { "USDC" };
+            format!("BINANCE:{}{}.P", raw_symbol.to_uppercase(), snapshot_quote)
+        });
         ResolvedSymbol {
             notion_symbol: format!("{raw_symbol}USDC"),
-            snapshot_ticker: Some(format!(
-                "BINANCE:{}{}.P",
-                raw_symbol.to_uppercase(),
-                snapshot_quote
-            )),
+            snapshot_ticker: Some(snapshot_ticker),
         }
     }
 }
@@ -76,6 +77,7 @@ mod tests {
             r#"
 "xyz:GOLD": "TVC:GOLD"
 "xyz:NVDA": "NASDAQ:NVDA"
+"kPEPE": "BINANCE:1000PEPEUSDT.P"
 "#,
         )
         .unwrap()
@@ -88,6 +90,17 @@ mod tests {
             ResolvedSymbol {
                 notion_symbol: "BTCUSDC".to_string(),
                 snapshot_ticker: Some("BINANCE:BTCUSDT.P".to_string()),
+            }
+        );
+    }
+
+    #[test]
+    fn applies_redirect_to_main_dex_symbol() {
+        assert_eq!(
+            redirects().resolve("kPEPE", true),
+            ResolvedSymbol {
+                notion_symbol: "kPEPEUSDC".to_string(),
+                snapshot_ticker: Some("BINANCE:1000PEPEUSDT.P".to_string()),
             }
         );
     }
