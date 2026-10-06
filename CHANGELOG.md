@@ -6,6 +6,11 @@
 ## [Unreleased]
 
 ## [3.1.0] - 2026-10-06
+### Fixed
+- 修复加仓成交被静默忽略的问题：开仓判断从 `start_position == 0` 改为使用 Hyperliquid 的 `dir` 字段（`Open Long` / `Open Short`），已有持仓时的加仓现在也会写入 Notion。
+- 修复同一订单（`oid`）慢速多笔成交被截断的问题：聚合由「首笔成交后固定 500 毫秒窗口」改为「3 秒防抖」，每笔新成交重置计时器，静默 3 秒后才汇总发送，避免写入的数量小于实际成交量。
+- `PositionTradeEvent` 现在携带真实的 `start_pos` / `end_pos`，并区分 `Open`（从零开仓）与 `Increase`（加仓）动作。
+
 ### Added
 - `REDIRECT_PATH` 映射同样作用于主网 symbol（无前缀），例如 `kPEPE` 可重定向到 `BINANCE:1000PEPEUSDT.P`；未配置时仍使用默认 Binance 永续 ticker。
 

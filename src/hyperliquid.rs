@@ -84,7 +84,13 @@ impl HyperliquidMonitor {
 
             info!("Successfully subscribed to UserEvents.");
 
-            let (timeout_tx, mut timeout_rx) = tokio::sync::mpsc::unbounded_channel::<u64>();
+            // Quiet window after the last fill of an order before flushing the
+            // aggregate. Fills of one order can arrive several seconds apart
+            // (observed gaps up to ~1.5s), so the timer is re-armed per fill
+            // (debounce) instead of running once from the first fill.
+            const AGGREGATION_QUIET_WINDOW: Duration = Duration::from_secs(3);
+
+            let (timeout_tx, mut timeout_rx) = tokio::sync::mpsc::unbounded_channel::<(u64, u64)>();
 
             struct AggregationState {
                 coin: String,
@@ -94,6 +100,10 @@ impl HyperliquidMonitor {
                 time: u64,
                 tid: u64,
                 crossed: bool,
+                start_position: f64,
+                // Bumped on every fill; a flush timer only fires the flush if
+                // its generation still matches (i.e. no newer fill arrived).
+                generation: u64,
             }
 
             let mut active_opening_orders =
@@ -111,11 +121,14 @@ impl HyperliquidMonitor {
                                         let sz: f64 = fill.sz.parse().unwrap_or(0.0);
                                         let px: f64 = fill.px.parse().unwrap_or(0.0);
 
-                                        // If it's a new open order or is part of an active opening order
-                                        if start_pos == 0.0 || active_opening_orders.contains_key(&fill.oid) {
-                                            match active_opening_orders.entry(fill.oid) {
+                                        // Capture fills that open or increase a position. Hyperliquid
+                                        // labels these dir = "Open Long" / "Open Short"; gating on
+                                        // start_pos == 0.0 (the old check) silently dropped adds to an
+                                        // existing position.
+                                        if fill.dir.starts_with("Open") || active_opening_orders.contains_key(&fill.oid) {
+                                            let generation = match active_opening_orders.entry(fill.oid) {
                                                 std::collections::hash_map::Entry::Vacant(e) => {
-                                                    // First fill of the opening order: create entry and spawn timeout
+                                                    // First fill of the opening order: create entry
                                                     e.insert(AggregationState {
                                                         coin: fill.coin.clone(),
                                                         side: fill.side.clone(),
@@ -124,6 +137,8 @@ impl HyperliquidMonitor {
                                                         time: fill.time,
                                                         tid: fill.tid,
                                                         crossed: fill.crossed,
+                                                        start_position: start_pos,
+                                                        generation: 0,
                                                     });
                                                     info!(
                                                         coin = %fill.coin,
@@ -131,21 +146,18 @@ impl HyperliquidMonitor {
                                                         px = %fill.px,
                                                         sz = %fill.sz,
                                                         oid = fill.oid,
+                                                        dir = %fill.dir,
+                                                        start_pos = start_pos,
                                                         "New opening order detected, starting aggregation..."
                                                     );
-
-                                                    let tx = timeout_tx.clone();
-                                                    let oid = fill.oid;
-                                                    tokio::spawn(async move {
-                                                        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-                                                        let _ = tx.send(oid);
-                                                    });
+                                                    0
                                                 }
                                                 std::collections::hash_map::Entry::Occupied(mut e) => {
                                                     // Subsequent fill of the active opening order: aggregate it
                                                     let state = e.get_mut();
                                                     state.accumulated_sz += sz;
                                                     state.accumulated_px_sz += px * sz;
+                                                    state.generation += 1;
                                                     info!(
                                                         coin = %fill.coin,
                                                         side = %fill.side,
@@ -155,11 +167,22 @@ impl HyperliquidMonitor {
                                                         accumulated_sz = %state.accumulated_sz,
                                                         "Aggregated additional fill for active opening order"
                                                     );
+                                                    state.generation
                                                 }
-                                            }
+                                            };
+
+                                            // (Re-)arm the flush timer for this order; older timers
+                                            // become no-ops because their generation no longer matches.
+                                            let tx = timeout_tx.clone();
+                                            let oid = fill.oid;
+                                            tokio::spawn(async move {
+                                                sleep(AGGREGATION_QUIET_WINDOW).await;
+                                                let _ = tx.send((oid, generation));
+                                            });
                                         } else {
                                             debug!(
                                                 coin = %fill.coin,
+                                                dir = %fill.dir,
                                                 start_pos = start_pos,
                                                 oid = fill.oid,
                                                 "Ignoring non-opening trade fill"
@@ -195,9 +218,17 @@ impl HyperliquidMonitor {
                             }
                         }
                     }
-                    oid = timeout_rx.recv() => {
-                        match oid {
-                            Some(oid) => {
+                    flush = timeout_rx.recv() => {
+                        match flush {
+                            Some((oid, generation)) => {
+                                // Only flush if no newer fill re-armed the timer since this
+                                // one was spawned; otherwise a later timer will handle it.
+                                let matches_generation = active_opening_orders
+                                    .get(&oid)
+                                    .is_some_and(|s| s.generation == generation);
+                                if !matches_generation {
+                                    continue;
+                                }
                                 if let Some(state) = active_opening_orders.remove(&oid).filter(|s| s.accumulated_sz > 0.0) {
                                     let avg_px = state.accumulated_px_sz / state.accumulated_sz;
                                     info!(
@@ -209,17 +240,29 @@ impl HyperliquidMonitor {
                                         "Aggregated opening order completed! Sending event..."
                                     );
 
+                                    // Position delta is negative for sells (short opens/adds)
+                                    let signed_sz = if state.side == "B" {
+                                        state.accumulated_sz
+                                    } else {
+                                        -state.accumulated_sz
+                                    };
+                                    let action = if state.start_position == 0.0 {
+                                        TradeAction::Open
+                                    } else {
+                                        TradeAction::Increase
+                                    };
+
                                     let event = PositionTradeEvent {
                                         coin: state.coin,
-                                        side: state.side,
+                                        side: state.side.clone(),
                                         px: format!("{:.5}", avg_px),
                                         sz: format!("{:.5}", state.accumulated_sz),
                                         time: state.time,
                                         tid: state.tid,
                                         oid,
-                                        action: TradeAction::Open,
-                                        start_pos: "0.0".to_string(),
-                                        end_pos: format!("{:.5}", state.accumulated_sz),
+                                        action,
+                                        start_pos: format!("{:.5}", state.start_position),
+                                        end_pos: format!("{:.5}", state.start_position + signed_sz),
                                         crossed: state.crossed,
                                     };
 
